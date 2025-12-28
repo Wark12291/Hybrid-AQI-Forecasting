@@ -1,123 +1,100 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import time
+import plotly.graph_objects as go
 
-# -----------------------------------------------------------
-# PAGE CONFIG
-# -----------------------------------------------------------
+# -------------------------------------------------
+# PAGE CONFIG + GLOBAL UI STYLES
+# -------------------------------------------------
 st.set_page_config(
-    page_title="Hybrid AQI Forecasting Dashboard",
+    page_title="Hybrid AQI Forecasting",
+    page_icon="🌫️",
     layout="wide",
-    page_icon="🌏"
+    initial_sidebar_state="expanded"
 )
 
-# -----------------------------------------------------------
-# LOAD DATA
-# -----------------------------------------------------------
-@st.cache_data
-def load_data():
-    df = pd.read_csv("data/test_with_anomalies.csv", parse_dates=["DateTime"])
-    hybrid = pd.read_csv("data/hybrid_forecast.csv")
-    df["Hybrid_AQI"] = hybrid["Hybrid_AQI"].head(len(df))
+# Custom CSS
+st.markdown("""
+    <style>
+        .main {
+            background-color: #F7F9FC;
+        }
+        .stApp {
+            background-color: #F7F9FC;
+        }
+        .metric-box {
+            padding: 15px;
+            border-radius: 12px;
+            background-color: white;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2, h3 {
+            color: #2C3E50;
+        }
+        .footer {
+            position: fixed;
+            bottom: 15px;
+            width: 100%;
+            text-align: center;
+            color: #777;
+            font-size: 14px;
+        }
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 0rem;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# -------------------------------------------------
+# HEADER
+# -------------------------------------------------
+st.markdown("""
+    <h1 style="text-align:center; font-size:42px;">
+        🌫️ Hybrid AQI Forecasting Dashboard
+    </h1>
+    <p style="text-align:center; font-size:18px; color:#555;">
+        ARIMA • LSTM • Quantum Features Powered Air Quality Prediction
+    </p>
+    <hr>
+""", unsafe_allow_html=True)
+
+# -------------------------------------------------
+# SIDEBAR INPUTS
+# -------------------------------------------------
+st.sidebar.header("🔧 Settings")
+
+uploaded_file = st.sidebar.file_uploader("Upload AQI Data (CSV)", type=["csv"])
+
+forecast_horizon = st.sidebar.slider(
+    "Forecast Duration (Hours)",
+    min_value=1, max_value=48, value=12
+)
+
+show_raw = st.sidebar.checkbox("Show Raw Data")
+
+# Dummy placeholders – replace with your real functions
+def load_data(csv_file):
+    df = pd.read_csv(csv_file)
     return df
 
-df = load_data()
+def get_current_aqi(df):
+    return df["AQI"].iloc[-1]
 
-# -----------------------------------------------------------
-# HEADER
-# -----------------------------------------------------------
-st.title("🌏 Hybrid AQI Forecasting — Quantum Hybrid Model")
-st.markdown("#### A real-time, spatio-temporal AQI monitoring dashboard")
+def run_hybrid_forecast(df, horizon=12):
+    # Replace with LSTM + ARIMA + Hybrid logic
+    future = pd.DataFrame({"Hours": list(range(1, horizon+1)),
+                           "Forecast_AQI": df["AQI"].iloc[-1] + (pd.Series(range(1, horizon+1)))})
+    return future
 
-# -----------------------------------------------------------
-# TOP ROW — Summary + Trend Chart
-# -----------------------------------------------------------
-top_left, top_right = st.columns([1, 2])  # 1/3 + 2/3 layout
+def plot_history(df):
+    fig = px.line(df, x=df.index, y="AQI", title="Historical AQI Trend")
+    fig.update_layout(height=450)
+    return fig
 
-with top_left:
-    st.subheader("📊 AQI Summary")
-    total_anomalies = int(df["Anomaly"].sum())
-    avg_aqi = round(df["AQI"].mean(), 2)
-    peak_aqi = int(df["AQI"].max())
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("🚨 Total Anomalies", total_anomalies)
-    c2.metric("🌤️ Avg AQI", avg_aqi)
-    c3.metric("🔥 Peak AQI", peak_aqi)
-
-    st.markdown("---")
-    st.markdown("**City Selection**")
-    cities = df["City"].unique().tolist()
-    selected_cities = st.multiselect(
-        "Select Cities to Compare",
-        cities,
-        # default=cities[:3]
-    )
-    filtered_df = df[df["City"].isin(selected_cities)]
-
-with top_right:
-    st.subheader("📈 AQI vs Hybrid Forecast Trend")
-    fig_trend = px.line(
-        filtered_df,
-        x="DateTime",
-        y=["AQI", "Hybrid_AQI"],
-        color="City",
-        labels={"value": "AQI", "variable": "Type"},
-        title="Actual vs Predicted AQI (Hybrid Model)"
-    )
-    st.plotly_chart(fig_trend, use_container_width=True)
-
-# -----------------------------------------------------------
-# BOTTOM ROW — Heatmap + Real-Time Updates
-# -----------------------------------------------------------
-bottom_left, bottom_right = st.columns(2)
-
-with bottom_left:
-    st.subheader("🗺️ City-wise AQI Heatmap")
-
-latest_time = df["DateTime"].max()
-latest_df = df[df["DateTime"] == latest_time]
-
-# ✅ Filter heatmap data based on selected cities
-latest_df = latest_df[latest_df["City"].isin(selected_cities)]
-
-fig_map = px.density_mapbox(
-    latest_df,
-    lat="Latitude",
-    lon="Longitude",
-    z="AQI",
-    radius=25,
-    hover_name="City",
-    mapbox_style="carto-positron",
-    color_continuous_scale="Turbo",
-    title=f"AQI Distribution — {latest_time.date()} ({', '.join(selected_cities)})",
-    zoom=4.3,
-)
-
-st.plotly_chart(fig_map, use_container_width=True)
-
-with bottom_right:
-    st.subheader("⏱️ Real-time AQI Update Simulation")
-
-    update_interval = st.slider("Update Interval (sec)", 2, 10, 5)
-    placeholder = st.empty()
-
-    for _ in range(5):  # simulate 5 updates
-        live_df = df.sample(80)
-        fig_live = px.scatter(
-            live_df,
-            x="DateTime",
-            y="AQI",
-            color="City",
-            title="Live AQI Stream (Simulated)",
-        )
-        placeholder.plotly_chart(fig_live, use_container_width=True)
-        time.sleep(update_interval)
-
-    st.success("✅ Live Simulation Completed")
-
-    st.markdown("---")
-    st.subheader("⚠️ Detected Anomalies (Top 10)")
-    anomalies = df[df["Anomaly"] == 1][["DateTime", "City", "AQI", "Hybrid_AQI"]]
-    st.dataframe(anomalies.head(10), height=250)
+def plot_forecast(df, future):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(y=df["AQI"], mode='lines', name="Historical AQI"))
+    fig.add_trace(go.Scatter(y=future["Forecast_AQI"], mode='lines+markers', name="Forecast AQI"))
+    fig.update_layout(title="AQI Forecas_
